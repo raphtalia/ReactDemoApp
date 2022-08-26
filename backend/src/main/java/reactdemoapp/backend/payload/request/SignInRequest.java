@@ -1,14 +1,9 @@
 package reactdemoapp.backend.payload.request;
 
+import lombok.Getter;
+
+@Getter
 public class SignInRequest {
-    private String username;
+    private String email;
     private String password;
-
-    public String getUsername() {
-        return username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
 }

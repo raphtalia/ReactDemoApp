@@ -11,14 +11,13 @@ import java.util.Date;
 @RequiredArgsConstructor
 @Accessors(chain = true)
 @Entity
-@Table(schema = "public", name = "refresh_tokens")
-public class RefreshToken {
+@Table(schema = "public", name = "blocked_jwts")
+public class BlockedJwt {
     @Id
     @Column(name = "token")
     private String token;
-    private String jwt;
     private long userId;
     @Temporal(TemporalType.TIMESTAMP)
     private Date timeCreated = new Date();
-    private int expiresIn = 60 * 60 * 24 * 28; // 28 days
+    private int expiresIn;
 }

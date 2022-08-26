@@ -1,36 +1,21 @@
 package reactdemoapp.backend.payload.response;
 
+import lombok.Getter;
+import lombok.Setter;
+import lombok.experimental.Accessors;
+
+import java.time.Instant;
+
+@Getter
+@Setter
+@Accessors(chain = true)
 public class JwtResponse {
-    private String username;
-    private String token;
+    private String email;
     private String type = "Bearer";
-    private String refreshToken;
-    private long expiresIn;
-
-    public JwtResponse(String username, String token, String refreshToken, long expiresIn) {
-        this.username = username;
-        this.token = token;
-        this.refreshToken = refreshToken;
-        this.expiresIn = expiresIn;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public String getToken() {
-        return token;
-    }
-
-    public String getType() {
-        return type;
-    }
-
-    public String getRefreshToken() {
-        return refreshToken;
-    }
-
-    public long getExpiresIn() {
-        return expiresIn;
-    }
+    private String access_token;
+    private Instant access_token_time_created = Instant.now();
+    private long access_token_expires_in = 60 * 60; // 1 hour
+    private String refresh_token;
+    private Instant refresh_token_time_created = Instant.now();
+    private long refresh_token_expires_in = 60 * 60 * 24 * 28; // 28 days
 }

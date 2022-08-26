@@ -1,14 +1,16 @@
 package reactdemoapp.backend.repositories;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import reactdemoapp.backend.models.RefreshToken;
 
 import java.util.List;
-import java.util.Optional;
 
-public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
-    @Override
-    Optional<RefreshToken> findById(Long id);
-    Optional<RefreshToken> findByToken(String token);
-    List<RefreshToken> findByUsername(String username);
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, String> {
+    @Query(value = "SELECT * FROM public.refresh_tokens WHERE time_created + (INTERVAL '1' SECOND * expires_in) < NOW();", nativeQuery = true)
+    List<RefreshToken> findByExpired();
+
+    List<RefreshToken> findByUserId(long userId);
+
+    RefreshToken findByToken(String token);
 }

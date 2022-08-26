@@ -13,15 +13,10 @@ import com.nimbusds.jose.proc.SecurityContext;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseBuilder;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.oauth2.server.resource.OAuth2ResourceServerConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.jdbc.JdbcDaoImpl;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -30,14 +25,33 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.web.BearerTokenAuthenticationEntryPoint;
 import org.springframework.security.oauth2.server.resource.web.access.BearerTokenAccessDeniedHandler;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.sql.DataSource;
 
-import static org.springframework.jdbc.datasource.embedded.EmbeddedDatabaseType.H2;
+import java.io.IOException;
+import java.sql.Timestamp;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.oauth2.jwt.*;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.authentication.logout.LogoutHandler;
+import org.springframework.web.filter.GenericFilterBean;
+import reactdemoapp.backend.models.BlockedJwt;
+import reactdemoapp.backend.models.User;
+import reactdemoapp.backend.repositories.BlockedJwtRepository;
+import reactdemoapp.backend.repositories.RefreshTokenRepository;
+import reactdemoapp.backend.repositories.UserRepository;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 @Configuration
 public class RestConfig {
@@ -47,35 +61,106 @@ public class RestConfig {
     @Value("${jwt.private.key}")
     RSAPrivateKey privateKey;
 
+    @Autowired
+    UserRepository userRepository;
+
+    @Autowired
+    RefreshTokenRepository refreshTokenRepository;
+
+    @Autowired
+    BlockedJwtRepository blockedJwtRepository;
+
+    @Bean
+    public GenericFilterBean jwtFilter() {
+        return new GenericFilterBean() {
+            @Override
+            public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws ServletException, IOException {
+                HttpServletRequest req = (HttpServletRequest) request;
+                HttpServletResponse res = (HttpServletResponse) response;
+                String token = req.getHeader("Authorization");
+
+                // Prevents from running on permitAll endpoints
+                if (token != null) {
+                    try {
+                        // Block tokens that have been signed out or "redeemed" through a refresh token
+                        if (blockedJwtRepository.findByToken(token.replace("Bearer ", "")) != null) {
+                            res.setStatus(HttpStatus.UNAUTHORIZED.value());
+                            return;
+                        }
+                    } catch (Exception e) {
+                        res.setStatus(HttpStatus.BAD_REQUEST.value());
+                        return;
+                    }
+                }
+                chain.doFilter(req, res);
+            }
+        };
+    }
+
+    @Bean
+    public LogoutHandler logoutHandler() {
+        return (request, response, authentication) -> {
+            // TODO: Fix HttpStatus codes not returning in response
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+
+            String token = request.getHeader("Authorization");
+            if (token == null) {
+                return;
+            }
+
+            token = token.replace("Bearer ", "");
+            Jwt jwt = jwtDecoder().decode(token);
+            String email = jwt.getSubject();
+            Timestamp issuedAt = new Timestamp(jwt.getIssuedAt().toEpochMilli());
+            int expiresIn = (int) (jwt.getExpiresAt().toEpochMilli() - jwt.getIssuedAt().toEpochMilli()) / 1000;
+
+            User user = userRepository.findByEmail(email);
+            if (user == null) {
+                return;
+            }
+
+            // TODO: Implement services somehow
+            // Invalidate the JWT now that the user has signed out
+            blockedJwtRepository.save(new BlockedJwt()
+                    .setToken(token)
+                    .setUserId(user.getUserId())
+                    .setTimeCreated(issuedAt)
+                    .setExpiresIn(expiresIn));
+            // RefreshTokenService
+            // Remove the used refresh token
+            refreshTokenRepository.findByUserId(user.getUserId()).forEach(refreshToken -> refreshTokenRepository.delete(refreshToken));
+
+            response.setStatus(HttpStatus.OK.value());
+        };
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests((authorize) -> authorize
-                        .anyRequest().authenticated()
+                        // Allow unauthorized requests to endpoints used to obtain a JWT
+                        .antMatchers("/api/v1/users/signIn", "/api/v1/users/signUp", "/api/v1/users/token").permitAll()
+                        // Require authorization for all other endpoints
+                        .antMatchers("/api/v1/users/*").authenticated()
                 )
-//                .csrf((csrf) -> csrf.ignoringAntMatchers("/api/v1/token"))
+                .addFilterAfter(jwtFilter(), AuthorizationFilter.class) // TODO: Figure out filter order
                 .csrf()
-                    .disable()
+                .disable()
                 .httpBasic(Customizer.withDefaults())
                 .logout()
-                    .logoutUrl("/api/v1/signOut")
-                    .invalidateHttpSession(true)
-                    .and()
+                .logoutUrl("/api/v1/users/signOut")
+                .addLogoutHandler(logoutHandler())
+                .invalidateHttpSession(true)
+                .and()
                 .oauth2ResourceServer(OAuth2ResourceServerConfigurer::jwt)
-                .sessionManagement((session) -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .sessionManagement()
+                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and()
                 .exceptionHandling((exceptions) -> exceptions
                         .authenticationEntryPoint(new BearerTokenAuthenticationEntryPoint())
                         .accessDeniedHandler(new BearerTokenAccessDeniedHandler())
                 );
         return http.build();
-    }
-
-    @Bean
-    DataSource dataSource() {
-        return new EmbeddedDatabaseBuilder()
-                .setType(H2)
-                .addScript(JdbcDaoImpl.DEFAULT_USER_SCHEMA_DDL_LOCATION)
-                .build();
     }
 
     @Bean
@@ -85,13 +170,7 @@ public class RestConfig {
 
     @Bean
     UserDetailsManager users(DataSource dataSource) {
-        UserDetails user = User.builder()
-                .username("user")
-                .password(passwordEncoder().encode("password"))
-                .roles("USER")
-                .build();
         JdbcUserDetailsManager users = new JdbcUserDetailsManager(dataSource);
-        users.createUser(user);
         return users;
     }
 
