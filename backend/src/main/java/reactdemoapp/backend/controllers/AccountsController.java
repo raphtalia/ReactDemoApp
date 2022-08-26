@@ -4,51 +4,56 @@ import java.time.Instant;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.oauth2.jwt.JwtClaimsSet;
-import org.springframework.security.oauth2.jwt.JwtEncoder;
-import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
+import reactdemoapp.backend.models.AccessToken;
+import reactdemoapp.backend.models.RefreshToken;
 import reactdemoapp.backend.payload.response.JwtResponse;
+import reactdemoapp.backend.security.jwt.JwtUtils;
+import reactdemoapp.backend.services.RefreshTokenService;
 
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
 @RequestMapping("/api/v1")
 public class AccountsController {
     @Autowired
-    JwtEncoder jwtEncoder;
+    JwtUtils jwtUtils;
+
+    @Autowired
+    RefreshTokenService refreshTokenService;
 
 //    @PostMapping("/signUp")
 //    public String signUp() {}
 
     @PostMapping("/signIn")
-    public JwtResponse signIn(Authentication authentication) {
-        Instant now = Instant.now();
-        long expiry = 3600L;
-        String scope = authentication.getAuthorities().stream()
-                .map(GrantedAuthority::getAuthority)
-                .collect(Collectors.joining(" "));
-        JwtClaimsSet claims = JwtClaimsSet.builder()
-                .issuer("self")
-                .issuedAt(now)
-                .expiresAt(now.plusSeconds(expiry))
-                .subject(authentication.getName())
-                .claim("scope", scope)
-                .build();
+    public JwtResponse signIn(Authentication auth) {
+        AccessToken accessToken = jwtUtils.generateAccessToken(auth);
         return new JwtResponse(
-                authentication.getName(),
-                this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue(),
-                "",
-                expiry
+                accessToken.getUsername(),
+                accessToken.getToken(),
+                refreshTokenService.createRefreshToken(auth.getName()).getToken(),
+                accessToken.getExpiresIn()
         );
     }
 
-//    @PostMapping("/token")
-//    public String token() {}
+    @PostMapping("/token")
+    public ResponseEntity<JwtResponse> token(@RequestParam("token") String token) {
+        try {
+            RefreshToken refreshToken = refreshTokenService.findByToken(token).get();
+            refreshTokenService.invalidateRefreshToken(refreshToken);
+            AccessToken accessToken = jwtUtils.generateAccessTokenFromUsername(refreshToken.getUsername());
+            return new ResponseEntity<>(new JwtResponse(
+                    accessToken.getUsername(),
+                    accessToken.getToken(),
+                    refreshTokenService.createRefreshToken(refreshToken.getUsername()).getToken(),
+                    accessToken.getExpiresIn()
+            ), HttpStatus.OK);
+        } catch (Exception e) {
+            return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
+        }
+    }
 
 //    @PostMapping("/update")
 //    public String update() {}
