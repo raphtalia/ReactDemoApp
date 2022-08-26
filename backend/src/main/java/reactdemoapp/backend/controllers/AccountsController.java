@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import reactdemoapp.backend.payload.response.JwtResponse;
 
 @CrossOrigin(origins = "http://localhost:5173")
 @RestController
@@ -21,10 +22,13 @@ public class AccountsController {
     @Autowired
     JwtEncoder jwtEncoder;
 
-    @PostMapping("/token")
-    public String token(Authentication authentication) {
+//    @PostMapping("/signUp")
+//    public String signUp() {}
+
+    @PostMapping("/signIn")
+    public JwtResponse signIn(Authentication authentication) {
         Instant now = Instant.now();
-        long expiry = 36000L;
+        long expiry = 3600L;
         String scope = authentication.getAuthorities().stream()
                 .map(GrantedAuthority::getAuthority)
                 .collect(Collectors.joining(" "));
@@ -35,6 +39,17 @@ public class AccountsController {
                 .subject(authentication.getName())
                 .claim("scope", scope)
                 .build();
-        return this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue();
+        return new JwtResponse(
+                authentication.getName(),
+                this.jwtEncoder.encode(JwtEncoderParameters.from(claims)).getTokenValue(),
+                "",
+                expiry
+        );
     }
+
+//    @PostMapping("/token")
+//    public String token() {}
+
+//    @PostMapping("/update")
+//    public String update() {}
 }
