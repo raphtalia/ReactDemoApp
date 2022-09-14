@@ -8,12 +8,12 @@ import javax.persistence.*;
 @Data
 @RequiredArgsConstructor
 @Entity
-@Table(name = "users")
+@Table(schema = "galadriel", name = "users")
 public class User {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(name = "id")
-    private long id;
+    @Column(name = "user_id")
+    private long user_id;
     private String username;
     private String password;
 }
