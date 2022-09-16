@@ -41,11 +41,6 @@ public class TokenService {
         blockedJwtRepository.findByExpired().forEach(token -> blockedJwtRepository.delete(token));
     }
 
-    public ArrayList<RefreshToken> findAll() {
-        deleteExpiredTokens();
-        return new ArrayList<>(refreshTokenRepository.findAll());
-    }
-
     public RefreshToken generateRefreshToken(User user, String jwt) {
         deleteExpiredTokens();
         return refreshTokenRepository.save(new RefreshToken()

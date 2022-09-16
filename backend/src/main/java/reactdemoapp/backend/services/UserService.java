@@ -36,10 +36,6 @@ public class UserService implements UserDetailsService {
         return builder.build();
     }
 
-    public ArrayList<User> findAll() {
-        return new ArrayList<>(userRepository.findAll());
-    }
-
     public User findByEmail(String email) {
         return userRepository.findByEmail(email);
     }

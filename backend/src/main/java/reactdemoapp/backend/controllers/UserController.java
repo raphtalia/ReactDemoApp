@@ -31,11 +31,6 @@ public class UserController {
     @Autowired
     UserService userService;
 
-    @GetMapping
-    public ArrayList<UserResponse> getUsers(){
-        return new ArrayList<>(userService.findAll()).stream().map(User::toResponse).collect(Collectors.toCollection(ArrayList::new));
-    }
-
     @PostMapping("signUp")
     public ResponseEntity<JwtResponse> signUp(@RequestBody SignUpRequest body){
         try {
@@ -98,10 +93,5 @@ public class UserController {
         } catch (Exception e) {
             return new ResponseEntity<>(HttpStatus.UNAUTHORIZED);
         }
-    }
-
-    @GetMapping("refreshTokens")
-    public ArrayList<RefreshToken> getRefreshTokens(){
-        return new ArrayList<>(tokenService.findAll());
     }
 }
