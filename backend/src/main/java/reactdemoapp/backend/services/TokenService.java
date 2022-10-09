@@ -1,6 +1,7 @@
 package reactdemoapp.backend.services;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.stereotype.Service;
@@ -14,7 +15,6 @@ import reactdemoapp.backend.utils.jwt.AccessToken;
 import reactdemoapp.backend.utils.jwt.JwtUtils;
 
 import java.sql.Timestamp;
-import java.util.ArrayList;
 
 @Service
 public class TokenService {
@@ -33,8 +33,8 @@ public class TokenService {
     @Autowired
     JwtDecoder jwtDecoder;
 
-    // TODO: Move to application.properties
-    private int refreshTokenLifetime = 60 * 60 * 24 * 28; // 28 days
+    @Value("${jwt.refresh-token-ttl}")
+    int refreshTokenTTL;
 
     private void deleteExpiredTokens() {
         refreshTokenRepository.findByExpired().forEach(token -> refreshTokenRepository.delete(token));
@@ -47,7 +47,7 @@ public class TokenService {
                 .setToken(java.util.UUID.randomUUID().toString())
                 .setJwt(jwt)
                 .setUserId(user.getUserId())
-                .setExpiresIn(refreshTokenLifetime));
+                .setExpiresIn(refreshTokenTTL));
     }
 
     public AccessToken useRefreshToken(String token) {
