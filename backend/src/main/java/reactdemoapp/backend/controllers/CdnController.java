@@ -1,20 +1,28 @@
 package reactdemoapp.backend.controllers;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import reactdemoapp.backend.annotations.Subdomain;
+import reactdemoapp.backend.payload.response.NewContentResponse;
+import reactdemoapp.backend.services.CdnService;
+
+import java.io.IOException;
 
 @RestController
 @Subdomain("cdn")
 @CrossOrigin(origins = "*")
 public class CdnController {
-    @GetMapping
-    public ResponseEntity<String> get() {
-        return ResponseEntity.ok("Hello from CDN 1");
+    @Autowired
+    CdnService cdnService;
+
+    @GetMapping("/{contentId}")
+    public ResponseEntity<byte[]> get(@PathVariable long contentId) throws IOException {
+        return ResponseEntity.ok(cdnService.get(contentId).getContent());
     }
 
-    @PostMapping ResponseEntity<String> post(@RequestBody byte[] body) {
-        System.out.println("Received " + body.length + " bytes");
-        return ResponseEntity.ok("Hello from CDN 2");
+    @PostMapping
+    public NewContentResponse post(@RequestBody byte[] content) throws IOException {
+        return cdnService.save(content).toResponse();
     }
 }
